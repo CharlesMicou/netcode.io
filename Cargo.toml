@@ -26,7 +26,7 @@ lazy_static = "1.4"
 
 [build-dependencies]
 cc = "1.0"
-bindgen = "0.54"
+bindgen = "0.59"
 
 [[bin]]
 path = "rust/src/example.rs"
