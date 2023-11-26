@@ -9,7 +9,6 @@
     feature = "cargo-clippy",
     warn(clippy, clippy_correctness, clippy_style, clippy_pedantic, clippy_perf)
 )]
-#![feature(nll, stmt_expr_attributes)]
 #![warn(rust_2018_idioms)]
 
 use netcode::{
