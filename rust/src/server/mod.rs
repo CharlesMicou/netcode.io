@@ -555,6 +555,7 @@ where
             let has_host = v.hosts.get().any(|thost| {
                 thost == self.listen_addr
                     || (self.listen_addr.port() == 0 && thost.ip() == self.listen_addr.ip())
+                    || (self.public_addr.ip() == thost.ip())
             });
 
             if has_host {
