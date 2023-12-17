@@ -48,11 +48,19 @@ pub fn main() {
         let include = env::var("INCLUDE").unwrap_or_else(|_| "".to_string());
         let sodium_include = env::var("SODIUM_LIB_DIR").unwrap_or_else(|_| "windows".to_string());
 
-        let private_bindings = bindgen::Builder::default()
+        // small hack: set this when building on linux to avoid libclang failures
+        let forego_includes = env::var("NETCODE_FOREGO_INCLUDES").is_ok();
+
+        let mut binding_builder = bindgen::Builder::default()
             .header("netcode.c")
-            .clang_arg("-Ic")
-            .clang_arg(format!("-I{}", sodium_include))
-            .clang_arg(format!("-I{}", include))
+            .clang_arg("-Ic");
+        if !forego_includes {
+            binding_builder = binding_builder
+                .clang_arg(format!("-I{}", sodium_include))
+                .clang_arg(format!("-I{}", include))
+        }
+
+        let private_bindings = binding_builder
             .whitelist_function("netcode_log_level")
             .whitelist_function("netcode_write_packet")
             .whitelist_function("netcode_read_packet")

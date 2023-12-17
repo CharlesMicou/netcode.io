@@ -42,3 +42,6 @@ c/docker/netcode.io
 c/valgrind/netcode.io
 docs
 *.exe
+
+# OSX
+*.DS_Store
