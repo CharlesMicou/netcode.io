@@ -55,9 +55,12 @@ pub fn main() {
             .header("netcode.c")
             .clang_arg("-Ic");
         if !forego_includes {
+            println!("Adding sodium and include paths");
             binding_builder = binding_builder
                 .clang_arg(format!("-I{}", sodium_include))
                 .clang_arg(format!("-I{}", include))
+        } else {
+            println!("Foregoing sodium/include paths")
         }
 
         let private_bindings = binding_builder
