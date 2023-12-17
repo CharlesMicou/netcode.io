@@ -73,7 +73,8 @@ type ClientVec = Vec<Option<Connection>>;
 /// fn run_server() {
 ///     const PROTOCOL_ID: u64 = 0xFFEE;
 ///     const MAX_CLIENTS: usize = 32;
-///     let mut server = UdpServer::new("127.0.0.1:0",
+///     let mut server = UdpServer::new("127.0.0.1:3031",
+///                                     "127.0.0.1:3031",
 ///                                     MAX_CLIENTS,
 ///                                     PROTOCOL_ID,
 ///                                     &netcode::generate_key()).unwrap();
@@ -113,6 +114,8 @@ struct ServerInternal<I, S> {
     listen_socket: I,
     listen_addr: SocketAddr,
 
+    public_addr: SocketAddr,
+
     protocol_id: u64,
     connect_key: [u8; NETCODE_KEY_BYTES],
 
@@ -139,6 +142,7 @@ where
     /// Constructs a new Server bound to `local_addr` with `max_clients` and supplied `private_key` for authentication.
     pub fn new<A>(
         local_addr: A,
+        public_addr: A,
         max_clients: usize,
         protocol_id: u64,
         private_key: &[u8; NETCODE_KEY_BYTES],
@@ -167,6 +171,7 @@ where
                         protocol_id,
                         listen_socket: s,
                         listen_addr: bind_addr,
+                        public_addr: public_addr.to_socket_addrs().unwrap().next().unwrap(),
                         connect_key: key_copy,
                         time: 0.0,
                         challenge_sequence: 0,
@@ -193,11 +198,7 @@ where
     ) -> Result<token::ConnectToken, token::GenerateError> {
         self.internal.token_sequence += 1;
 
-        let addr = if self.internal.listen_addr.port() == 0 {
-            self.get_local_addr()?
-        } else {
-            self.internal.listen_addr
-        };
+        let addr = self.internal.public_addr;
 
         token::ConnectToken::generate(
             [addr].iter().cloned(),
@@ -770,9 +771,9 @@ mod test {
         pub fn new(port: Option<u16>) -> TestHarness<I, S> {
             let private_key = crypto::generate_key();
 
-            let addr = format!("127.0.0.1:{}", port.unwrap_or(0));
+            let addr = format!("127.0.0.1:{}", port.unwrap_or(3031));
             let mut server =
-                Server::<I, S>::new(&addr, MAX_CLIENTS, PROTOCOL_ID, &private_key).unwrap();
+                Server::<I, S>::new(&addr, &addr, MAX_CLIENTS, PROTOCOL_ID, &private_key).unwrap();
             server
                 .set_read_timeout(Some(Duration::from_secs(15)))
                 .unwrap();

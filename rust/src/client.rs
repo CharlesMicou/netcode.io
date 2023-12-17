@@ -488,13 +488,13 @@ mod test {
         pub fn new(in_token: Option<ConnectToken>) -> TestHarness<I, S> {
             let private_key = crypto::generate_key();
 
-            let addr = format!("127.0.0.1:0");
+            let addr = format!("127.0.0.1:3031");
             let (server, mut client) = if let Some(ref token) = in_token {
                 let client = Client::<I, S>::new_with_state(token, I::new_state()).unwrap();
                 (None, client)
             } else {
                 let mut server =
-                    Server::<I, S>::new(&addr, MAX_CLIENTS, PROTOCOL_ID, &private_key).unwrap();
+                    Server::<I, S>::new(&addr, &addr, MAX_CLIENTS, PROTOCOL_ID, &private_key).unwrap();
                 server
                     .set_read_timeout(Some(Duration::from_secs(1)))
                     .unwrap();

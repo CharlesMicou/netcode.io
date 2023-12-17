@@ -61,7 +61,8 @@ fn main() {
     */
 
     let mut server = UdpServer::new(
-        "127.0.0.1:0",
+        "127.0.0.1:3031",
+        "127.0.0.1:3031",
         MAX_CLIENTS,
         PROTOCOL_ID,
         &netcode::generate_key(),
