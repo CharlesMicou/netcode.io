@@ -252,14 +252,17 @@ where
     I: SocketProvider<I, S>,
 {
     /// Constructs a new client from an existing `ConnectToken`.
-    pub fn new(token: &ConnectToken) -> Result<Self, SendError> {
+    pub fn new(token: &ConnectToken, local: bool) -> Result<Self, SendError> {
         Self::new_with_state(token, I::new_state())
     }
 
-    fn new_with_state(token: &ConnectToken, mut socket_state: S) -> Result<Self, SendError> {
+    fn new_with_state(token: &ConnectToken, mut socket_state: S, local: bool) -> Result<Self, SendError> {
         use std::str::FromStr;
 
-        let local_addr = SocketAddr::from_str("127.0.0.1:0").unwrap();
+        let local_addr = match local {
+            true => SocketAddr::from_str("127.0.0.1:0").unwrap(),
+            false => SocketAddr::from_str("0.0.0.0:0").unwrap(),
+        };
         let socket = I::bind(&local_addr, &mut socket_state)?;
 
         trace!(
