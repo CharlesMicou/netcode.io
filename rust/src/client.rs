@@ -253,7 +253,7 @@ where
 {
     /// Constructs a new client from an existing `ConnectToken`.
     pub fn new(token: &ConnectToken, local: bool) -> Result<Self, SendError> {
-        Self::new_with_state(token, I::new_state())
+        Self::new_with_state(token, I::new_state(), local)
     }
 
     fn new_with_state(token: &ConnectToken, mut socket_state: S, local: bool) -> Result<Self, SendError> {
