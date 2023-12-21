@@ -97,7 +97,7 @@ fn main() {
         }
     });
 
-    let mut client = UdpClient::new(&token).unwrap();
+    let mut client = UdpClient::new(&token, true).unwrap();
 
     let (tx, rx) = mpsc::channel();
     let client_thread = thread::spawn(move || {
