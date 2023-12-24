@@ -706,7 +706,7 @@ where
                         .channel
                         .send_keep_alive(self.time, &mut self.listen_socket)?;
 
-                    info!("client response");
+                    trace!("client response: {}", client.client_id);
 
                     state = Some(ConnectionState::Idle);
                     Some(ServerEvent::ClientConnect(token.client_id))
