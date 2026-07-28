@@ -325,16 +325,19 @@ where
             self.internal.handle_client_disconnect(client)?;
         }
 
-        let idx = self
-            .clients
+        Self::free_client_slot(&mut self.clients, client_id);
+
+        Ok(())
+    }
+
+    fn free_client_slot(clients: &mut ClientVec, client_id: ClientId) {
+        let idx = clients
             .iter()
             .position(|c| c.as_ref().map_or(false, |c| c.client_id == client_id));
 
         if let Some(idx) = idx {
-            self.clients[idx] = None;
+            clients[idx] = None;
         }
-
-        Ok(())
     }
 
     fn handle_io(
@@ -356,10 +359,23 @@ where
         };
 
         //If we didn't have an existing client then handle a new client
-        result.unwrap_or_else(|| {
-            self.internal
-                .handle_new_client(addr, data, payload, &mut self.clients)
-        })
+        let event = match result {
+            Some(result) => result?,
+            None => {
+                return self
+                    .internal
+                    .handle_new_client(addr, data, payload, &mut self.clients)
+            }
+        };
+
+        //handle_packet assigns Disconnected in place instead of going through
+        //tick_client, and a Disconnected connection ticks to Noop forever, so
+        //nothing else will ever reclaim this slot
+        if let Some(ServerEvent::ClientDisconnect(client_id)) = event {
+            Self::free_client_slot(&mut self.clients, client_id);
+        }
+
+        Ok(event)
     }
 
     fn find_client_by_id(clients: &mut ClientVec, id: ClientId) -> Option<&mut Connection> {
@@ -954,9 +970,45 @@ mod test {
 
         fn send_payload(&mut self, payload: &[u8]) {
             let (len, data) = self.generate_payload_packet(payload);
+            self.send_raw(&data[..len]);
+        }
+
+        fn send_raw(&mut self, data: &[u8]) {
             self.socket
-                .send_to(&data[..len], &self.server.get_local_addr().unwrap())
+                .send_to(data, &self.server.get_local_addr().unwrap())
                 .unwrap();
+        }
+
+        fn connect_client(&mut self) {
+            self.send_connect_packet();
+            self.validate_challenge();
+            let challenge = self.read_challenge();
+            self.send_response(challenge);
+            self.validate_response();
+        }
+
+        fn send_disconnect(&mut self) {
+            let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+            let len = packet::encode(
+                &mut data,
+                PROTOCOL_ID,
+                &Packet::Disconnect,
+                Some((
+                    self.get_next_sequence(),
+                    &self.connect_token.client_to_server_key,
+                )),
+                None,
+            )
+            .unwrap();
+            self.send_raw(&data[..len]);
+        }
+
+        fn connected_client_ids(&self) -> Vec<ClientId> {
+            self.server
+                .clients
+                .iter()
+                .filter_map(|c| c.as_ref().map(|c| c.client_id))
+                .collect()
         }
 
         fn validate_recv_payload(&mut self, payload: &[u8]) {
@@ -1033,6 +1085,48 @@ mod test {
         let challenge = harness.read_challenge();
         harness.send_response(challenge);
         harness.validate_response();
+    }
+
+    /// `ClientDisconnect` must leave the id free to connect again, whichever of
+    /// the three routes to it the server took.
+    #[test]
+    fn test_disconnect_packet_frees_client_slot() {
+        let mut harness = TestHarness::<UdpSocket, ()>::new(None);
+        harness.connect_client();
+
+        harness.send_disconnect();
+
+        let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
+        harness.server.update(0.0);
+        match harness.server.next_event(&mut data) {
+            Ok(Some(ServerEvent::ClientDisconnect(cid))) => assert_eq!(cid, CLIENT_ID),
+            o => assert!(false, "unexpected {:?}", o),
+        }
+        assert!(
+            harness.connected_client_ids().is_empty(),
+            "the disconnected client still occupies a slot: {:?}",
+            harness.connected_client_ids()
+        );
+    }
+
+    #[test]
+    fn test_undecodable_packet_frees_client_slot() {
+        let mut harness = TestHarness::<UdpSocket, ()>::new(None);
+        harness.connect_client();
+
+        harness.send_raw(&[0xCC; 32]);
+
+        let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
+        harness.server.update(0.0);
+        match harness.server.next_event(&mut data) {
+            Ok(Some(ServerEvent::ClientDisconnect(cid))) => assert_eq!(cid, CLIENT_ID),
+            o => assert!(false, "unexpected {:?}", o),
+        }
+        assert!(
+            harness.connected_client_ids().is_empty(),
+            "the dropped client still occupies a slot: {:?}",
+            harness.connected_client_ids()
+        );
     }
 
     #[test]
