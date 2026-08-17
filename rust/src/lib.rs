@@ -63,7 +63,7 @@
 //!                                 //It must be sent over a secure channel because
 //!                                 //it contains private keys in the clear.
 //!     let token = ConnectToken::read(&mut io::Cursor::new(&token_data[..])).unwrap();
-//!     let mut client = UdpClient::new(&token).unwrap();
+//!     let mut client = UdpClient::new(&token, false).unwrap();
 //!     loop {
 //!         client.update(1.0 / 10.0);
 //!         let mut packet_data = [0; netcode::NETCODE_MAX_PAYLOAD_SIZE];
