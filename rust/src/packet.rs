@@ -116,6 +116,12 @@ where
     R: io::Read,
 {
     let mut seq_scratch = [0; 8];
+    if len > seq_scratch.len() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "sequence length exceeds eight bytes",
+        ));
+    }
     source.read_exact(&mut seq_scratch[0..len])?;
     io::Cursor::new(&seq_scratch).read_u64::<LittleEndian>()
 }
@@ -550,6 +556,19 @@ fn test_sequence() {
         test_seq_value(bits);
         assert_eq!(i + 1, sequence_bytes_required(bits));
         bits <<= 8;
+    }
+}
+
+#[test]
+fn test_decode_rejects_oversized_sequence_length() {
+    let private_key = crypto::generate_key();
+    let mut out = [0; NETCODE_MAX_PAYLOAD_SIZE];
+
+    for prefix in 9..=15u8 {
+        let mut data = [0xCC; 32];
+        data[0] = (PACKET_PAYLOAD & 0xF) | (prefix << 4);
+
+        assert!(decode(&data, 0xFFCC, Some(&private_key), &mut out).is_err());
     }
 }
 
