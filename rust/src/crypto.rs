@@ -1,16 +1,9 @@
-use libsodium_sys;
-
 use crate::common::*;
-use byteorder::{LittleEndian, WriteBytesExt};
+use chacha20poly1305::aead::AeadInPlace;
+use chacha20poly1305::{ChaCha20Poly1305, KeyInit, Nonce, Tag};
 use std::io;
-use std::sync::atomic;
 
-// TODO: fix me
-#[cfg_attr(feature = "cargo-clippy", allow(replace_consts))]
-static mut SODIUM_INIT: atomic::AtomicUsize = atomic::AtomicUsize::new(0);
-
-pub const NETCODE_ENCRYPT_EXTA_BYTES: usize =
-    libsodium_sys::crypto_aead_chacha20poly1305_ABYTES as usize;
+pub const NETCODE_ENCRYPT_EXTA_BYTES: usize = 16;
 
 #[derive(Debug)]
 pub enum EncryptError {
@@ -26,15 +19,6 @@ impl From<io::Error> for EncryptError {
     }
 }
 
-fn init_sodium() {
-    unsafe {
-        if SODIUM_INIT.load(atomic::Ordering::Relaxed) == 0 {
-            libsodium_sys::sodium_init();
-            SODIUM_INIT.store(1, atomic::Ordering::Relaxed);
-        }
-    }
-}
-
 /// Generates a new random private key.
 pub fn generate_key() -> [u8; NETCODE_KEY_BYTES] {
     let mut key: [u8; NETCODE_KEY_BYTES] = [0; NETCODE_KEY_BYTES];
@@ -45,14 +29,16 @@ pub fn generate_key() -> [u8; NETCODE_KEY_BYTES] {
 }
 
 pub fn random_bytes(out: &mut [u8]) {
-    unsafe {
-        init_sodium();
-        libsodium_sys::randombytes_buf(out.as_mut_ptr() as _, out.len());
-    }
+    getrandom::getrandom(out).expect("Failed to read from the operating system's entropy source");
 }
 
-// TODO: fix me
-#[cfg_attr(feature = "cargo-clippy", allow(cast_possible_truncation))]
+fn nonce_from_sequence(sequence: u64) -> Nonce {
+    let mut bytes = [0; 12];
+    bytes[4..].copy_from_slice(&sequence.to_le_bytes());
+
+    Nonce::from(bytes)
+}
+
 pub fn encode(
     out: &mut [u8],
     data: &[u8],
@@ -60,44 +46,26 @@ pub fn encode(
     nonce: u64,
     key: &[u8; NETCODE_KEY_BYTES],
 ) -> Result<usize, EncryptError> {
-    if key.len() != NETCODE_KEY_BYTES {
-        return Err(EncryptError::InvalidPublicKeySize);
-    }
-
     if out.len() < data.len() + NETCODE_ENCRYPT_EXTA_BYTES {
         return Err(EncryptError::BufferSizeMismatch);
     }
 
-    let (result, written) = unsafe {
-        init_sodium();
-        let mut written: u64 = out.len() as u64;
+    let cipher = ChaCha20Poly1305::new(key.into());
+    out[..data.len()].copy_from_slice(data);
 
-        let mut final_nonce = [0; 12];
-        io::Cursor::new(&mut final_nonce[4..]).write_u64::<LittleEndian>(nonce)?;
+    let tag = cipher
+        .encrypt_in_place_detached(
+            &nonce_from_sequence(nonce),
+            additional_data.unwrap_or(&[]),
+            &mut out[..data.len()],
+        )
+        .map_err(|_| EncryptError::Failed)?;
 
-        let result = libsodium_sys::crypto_aead_chacha20poly1305_ietf_encrypt(
-            out.as_mut_ptr(),
-            &mut written,
-            data.as_ptr(),
-            data.len() as u64,
-            additional_data.map_or(::std::ptr::null_mut(), |v| v.as_ptr()),
-            additional_data.map_or(0, |v| v.len()) as u64,
-            ::std::ptr::null(),
-            final_nonce.as_ptr(),
-            key.as_ptr(),
-        );
+    out[data.len()..data.len() + NETCODE_ENCRYPT_EXTA_BYTES].copy_from_slice(&tag);
 
-        (result, written)
-    };
-
-    match result {
-        -1 => Err(EncryptError::Failed),
-        _ => Ok(written as usize),
-    }
+    Ok(data.len() + NETCODE_ENCRYPT_EXTA_BYTES)
 }
 
-// TODO: fix me
-#[cfg_attr(feature = "cargo-clippy", allow(cast_possible_truncation))]
 pub fn decode(
     out: &mut [u8],
     data: &[u8],
@@ -105,40 +73,28 @@ pub fn decode(
     nonce: u64,
     key: &[u8; NETCODE_KEY_BYTES],
 ) -> Result<usize, EncryptError> {
-    if key.len() != NETCODE_KEY_BYTES {
-        return Err(EncryptError::InvalidPublicKeySize);
-    }
+    let message_len = data
+        .len()
+        .checked_sub(NETCODE_ENCRYPT_EXTA_BYTES)
+        .ok_or(EncryptError::BufferSizeMismatch)?;
 
-    if out.len() < data.len() - NETCODE_ENCRYPT_EXTA_BYTES {
+    if out.len() < message_len {
         return Err(EncryptError::BufferSizeMismatch);
     }
 
-    let (result, read) = unsafe {
-        init_sodium();
-        let mut read: u64 = out.len() as u64;
+    let cipher = ChaCha20Poly1305::new(key.into());
+    out[..message_len].copy_from_slice(&data[..message_len]);
 
-        let mut final_nonce = [0; 12];
-        io::Cursor::new(&mut final_nonce[4..]).write_u64::<LittleEndian>(nonce)?;
+    cipher
+        .decrypt_in_place_detached(
+            &nonce_from_sequence(nonce),
+            additional_data.unwrap_or(&[]),
+            &mut out[..message_len],
+            Tag::from_slice(&data[message_len..]),
+        )
+        .map_err(|_| EncryptError::Failed)?;
 
-        let result = libsodium_sys::crypto_aead_chacha20poly1305_ietf_decrypt(
-            out.as_mut_ptr(),
-            &mut read,
-            ::std::ptr::null_mut(),
-            data.as_ptr(),
-            data.len() as u64,
-            additional_data.map_or(::std::ptr::null_mut(), |v| v.as_ptr()),
-            additional_data.map_or(0, |v| v.len()) as u64,
-            final_nonce.as_ptr(),
-            key.as_ptr(),
-        );
-
-        (result, read)
-    };
-
-    match result {
-        -1 => Err(EncryptError::Failed),
-        _ => Ok(read as usize),
-    }
+    Ok(message_len)
 }
 
 #[cfg(test)]
@@ -243,6 +199,22 @@ mod test {
             &KEY,
         )
         .is_err());
+    }
+
+    #[test]
+    fn rejects_a_ciphertext_shorter_than_the_tag() {
+        let mut decoded = [0; PLAINTEXT.len()];
+
+        for len in 0..NETCODE_ENCRYPT_EXTA_BYTES {
+            assert!(decode(
+                &mut decoded,
+                &CIPHERTEXT[..len],
+                Some(ADDITIONAL_DATA),
+                SEQUENCE,
+                &KEY,
+            )
+            .is_err());
+        }
     }
 
     #[test]
