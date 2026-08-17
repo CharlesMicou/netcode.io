@@ -757,7 +757,6 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::common::*;
     use crate::packet::*;
     use crate::token;
 
