@@ -21,12 +21,7 @@ For a complete technical specification, read the [netcode 1.02 standard](https:/
 
 # Source Code
 
-This is a fork, and it holds the Rust implementation of netcode.io and nothing
-else. The C implementation the upstream repository is built around, along with
-its build files and its bindgen bindings, has been removed: the bindings were
-only ever a test-time reference oracle, and carrying them meant every build
-needed libclang and libsodium's headers.
-
+This is a fork (actually it's a fork of a fork of a fork, and at this point the original C code is no longer included)
 The Rust crate lives under `rust/`, with its manifest at the repository root.
 
 Other netcode.io repositories include:
@@ -54,7 +49,7 @@ Thanks for your contributions to netcode.io!
 
 # Author
 
-The author of this library is [Glenn Fiedler](https://www.linkedin.com/in/glennfiedler).
+The author of the original C library is [Glenn Fiedler](https://www.linkedin.com/in/glennfiedler).
 
 Glenn wrote an article series about the development of this library called [Building a Game Network Protocol](https://gafferongames.com/categories/building-a-game-network-protocol).
 
