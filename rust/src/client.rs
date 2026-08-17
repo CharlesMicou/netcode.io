@@ -493,7 +493,7 @@ mod test {
 
             let addr = format!("127.0.0.1:3031");
             let (server, mut client) = if let Some(ref token) = in_token {
-                let client = Client::<I, S>::new_with_state(token, I::new_state()).unwrap();
+                let client = Client::<I, S>::new_with_state(token, I::new_state(), true).unwrap();
                 (None, client)
             } else {
                 let mut server =
@@ -504,7 +504,7 @@ mod test {
                 let token =
                     Self::generate_connect_token(&private_key, server.get_local_addr().unwrap());
                 let client =
-                    Client::<I, S>::new_with_state(&token, server.get_socket_state().clone())
+                    Client::<I, S>::new_with_state(&token, server.get_socket_state().clone(), true)
                         .unwrap();
                 (Some(server), client)
             };
