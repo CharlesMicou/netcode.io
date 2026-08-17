@@ -1,5 +1,3 @@
-[![Travis Build Status](https://travis-ci.org/networkprotocol/netcode.io.svg?branch=master)](https://travis-ci.org/networkprotocol/netcode.io)
-
 # netcode.io
 
 **netcode.io** is a connection-oriented protocol built on top of UDP. 
@@ -23,7 +21,13 @@ For a complete technical specification, read the [netcode 1.02 standard](https:/
 
 # Source Code
 
-This repository holds the implementation of netcode.io in C.
+This is a fork, and it holds the Rust implementation of netcode.io and nothing
+else. The C implementation the upstream repository is built around, along with
+its build files and its bindgen bindings, has been removed: the bindings were
+only ever a test-time reference oracle, and carrying them meant every build
+needed libclang and libsodium's headers.
+
+The Rust crate lives under `rust/`, with its manifest at the repository root.
 
 Other netcode.io repositories include:
 
