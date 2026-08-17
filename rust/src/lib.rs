@@ -140,19 +140,6 @@
 #![warn(clippy::all)]
 #![warn(rust_2018_idioms)]
 
-/*
-
-
-#[cfg(test)]
-
-*/
-
-#[cfg(test)]
-#[macro_use]
-#[macro_use]
-#[cfg(test)]
-pub mod capi;
-
 mod channel;
 mod client;
 mod common;
