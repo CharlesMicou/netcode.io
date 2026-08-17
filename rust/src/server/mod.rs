@@ -785,20 +785,22 @@ mod test {
         pub fn new(port: Option<u16>) -> TestHarness<I, S> {
             let private_key = crypto::generate_key();
 
-            let addr = format!("127.0.0.1:{}", port.unwrap_or(3031));
+            let addr = format!("127.0.0.1:{}", port.unwrap_or(0));
             let mut server =
                 Server::<I, S>::new(&addr, &addr, MAX_CLIENTS, PROTOCOL_ID, &private_key).unwrap();
             server
                 .set_read_timeout(Some(Duration::from_secs(15)))
                 .unwrap();
-            let socket = I::bind(&Self::str_to_addr(&addr), server.get_socket_state()).unwrap();
+            let server_addr = server.get_local_addr().unwrap().to_string();
+            let socket =
+                I::bind(&Self::str_to_addr("127.0.0.1:0"), server.get_socket_state()).unwrap();
 
             TestHarness {
                 server,
                 private_key,
                 socket,
                 next_sequence: 0,
-                connect_token: Self::generate_connect_token(&private_key, addr.as_str()),
+                connect_token: Self::generate_connect_token(&private_key, server_addr.as_str()),
             }
         }
 
